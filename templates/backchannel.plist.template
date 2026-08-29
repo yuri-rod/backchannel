@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.backchannel-COMMAND</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>PREFIX/bin/backchannel</string>
+    <string>COMMAND</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- Never use a bare <key>KeepAlive</key><true/> here. launchd reads that as
+       "restart whatever the exit status was", so a process that dies on a bad
+       config comes straight back, dies again, and pins a core until you notice.
+       SuccessfulExit=false restarts only a non-zero exit; it still gives up
+       after repeated fast failures instead of hammering. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/backchannel-COMMAND.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/backchannel-COMMAND.log</string>
+</dict>
+</plist>

@@ -1,0 +1,40 @@
+# Copy to ~/.config/backchannel/config.toml and edit.
+# Every setting can also be overridden by an environment variable named
+# BACKCHANNEL_<SETTING>, e.g. BACKCHANNEL_PORT=9000.
+
+[bridge]
+# Which agent's transcript to mirror: "claude-code" or "codex".
+agent = "claude-code"
+
+# The project you are working in. For claude-code this is resolved to the
+# matching directory under ~/.claude/projects; you can also point it straight
+# at a directory of session files.
+workspace = "~/code/my-project"
+
+# Shown in the browser tab and the page header.
+title = "Backchannel"
+
+# How the two sides are labelled in the transcript.
+you_label = "YOU"
+agent_label = "AGENT"
+
+[server]
+# Keep this on the loopback address. Expose it with a tunnel, never by binding
+# to 0.0.0.0 (see SECURITY.md).
+host = "127.0.0.1"
+port = 8686
+
+# Where the rendered transcript and the inbox live.
+share_root = "~/.backchannel/share"
+
+# The shared secret for the URL. Created on first run if missing.
+token_file = "~/.backchannel/token"
+
+max_upload_bytes = 104857600
+max_pending_uploads = 20
+
+[mirror]
+poll_seconds = 2.0
+
+# "local", or an IANA name such as "America/Sao_Paulo".
+timezone = "local"

@@ -1,0 +1,149 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>__TITLE__</title>
+<style>
+  :root { color-scheme: light dark; --bg:#12131a; --panel:#1c1d26; --line:#2b2d3a;
+          --text:#e6e6ea; --muted:#9a9cae; --action:#3f6ae0; --code:#242633;
+          --you:#7aa2ff; --agent:#7ddba5; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fbfbfd; --panel:#fff; --line:#e3e3ea; --text:#1b1c22;
+            --muted:#6b6d7d; --code:#f0f0f5; --you:#2f5fd0; --agent:#1a7f4b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100dvh; display:flex; flex-direction:column;
+         background:var(--bg); color:var(--text);
+         font:15px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px;
+           background:var(--panel); border-bottom:1px solid var(--line);
+           font-size:12px; color:var(--muted); flex:0 0 auto; }
+  header b { color:var(--text); font-size:13px; }
+  #body { flex:1 1 auto; overflow-y:auto; padding:8px 18px 24px;
+          white-space:pre-wrap; word-wrap:break-word; font-size:14.5px; }
+  .speaker { margin:26px 0 10px; padding-top:12px; border-top:1px solid var(--line);
+             font-size:12px; font-weight:700; letter-spacing:.08em; }
+  .speaker:first-child { margin-top:4px; border-top:0; padding-top:0; }
+  .speaker.you { color:var(--you); }
+  .speaker.agent { color:var(--agent); }
+  .speaker span { color:var(--muted); font-weight:500; letter-spacing:0; margin-left:8px; }
+  #body strong { font-weight:700; }
+  #body code { background:var(--code); padding:1px 5px; border-radius:4px;
+               font:0.88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #body pre.block { background:var(--code); padding:11px 13px; border-radius:8px;
+                    overflow-x:auto; margin:10px 0; white-space:pre;
+                    font:12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  footer { flex:0 0 auto; display:grid; gap:10px; padding:12px 16px;
+           background:var(--panel); border-top:1px solid var(--line); }
+  textarea { min-height:76px; max-height:40vh; padding:10px; border-radius:8px;
+             border:1px solid var(--line); background:var(--bg); color:inherit;
+             font:13px/1.5 ui-monospace, Menlo, monospace; resize:vertical; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { padding:10px 20px; border:0; border-radius:8px; background:var(--action);
+           color:#fff; font-size:15px; font-weight:600; }
+  button:disabled { opacity:.55; }
+  #status { font-size:12px; color:var(--muted); }
+  a { color:#8ab4ff; }
+</style>
+<header>
+  <b>__TITLE__</b>
+  <span id="stamp">loading...</span>
+  <a id="download" href="#" download="transcript.txt">download</a>
+</header>
+<div id="body"></div>
+<footer>
+  <textarea id="text" placeholder="type or paste what you want to send"></textarea>
+  <div class="row">
+    <input type="file" id="files" multiple>
+    <button id="send">Send</button>
+    <span id="status"></span>
+  </div>
+</footer>
+<script>
+  const YOU = __YOU_JSON__;
+  const AGENT = __AGENT_JSON__;
+  const KEY = new URLSearchParams(location.search).get('k') || '';
+  const SOURCE = '/transcript.txt?k=' + encodeURIComponent(KEY);
+
+  const body = document.getElementById('body');
+  const stamp = document.getElementById('stamp');
+  const status = document.getElementById('status');
+  const button = document.getElementById('send');
+  document.getElementById('download').href = SOURCE;
+  let previous = null;
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  const HEADING = new RegExp(
+    '^### (' + escapeRe(YOU) + '|' + escapeRe(AGENT) + ')  (\\d\\d:\\d\\d|--:--)$', 'gm');
+
+  function format(text) {
+    let h = escapeHtml(text);
+    h = h.replace(/```[a-zA-Z]*\n([\s\S]*?)```/g, (m, code) =>
+      '<pre class="block">' + code.replace(/\n$/, '') + '</pre>');
+    h = h.replace(HEADING, (m, who, time) =>
+      '<div class="speaker ' + (who === YOU ? 'you' : 'agent') + '">' +
+      escapeHtml(who) + '<span>' + time + '</span></div>');
+    h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    return h;
+  }
+
+  async function tick() {
+    try {
+      const res = await fetch(SOURCE + '&t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      const text = await res.text();
+      if (text !== previous) {
+        const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 80;
+        previous = text;
+        body.innerHTML = format(text);
+        if (atBottom) body.scrollTop = body.scrollHeight;
+      }
+      stamp.textContent = 'updated ' + new Date().toLocaleTimeString();
+    } catch (err) {
+      stamp.textContent = 'offline (' + err.message + ')';
+    }
+  }
+
+  async function put(name, content) {
+    const target = '/send?k=' + encodeURIComponent(KEY) +
+      '&name=' + encodeURIComponent(name);
+    const res = await fetch(target, { method: 'POST', body: content });
+    if (!res.ok) throw new Error(name + ': ' + res.status);
+  }
+
+  async function send() {
+    const picker = document.getElementById('files');
+    const field = document.getElementById('text');
+    const text = field.value.trim();
+    if (!picker.files.length && !text) { status.textContent = 'nothing to send'; return; }
+    button.disabled = true;
+    status.textContent = 'sending...';
+    try {
+      for (const file of picker.files) await put(file.name, file);
+      if (text) {
+        const mark = new Date().toISOString().replace(/[:.]/g, '-');
+        await put('pasted-' + mark + '.txt', text);
+        field.value = '';
+      }
+      picker.value = '';
+      status.textContent = 'sent';
+      setTimeout(() => { status.textContent = ''; }, 4000);
+    } catch (err) {
+      status.textContent = 'failed (' + err.message + ')';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  button.addEventListener('click', send);
+  tick();
+  setInterval(tick, 3000);
+</script>

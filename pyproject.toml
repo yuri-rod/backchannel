@@ -1,0 +1,21 @@
+[project]
+name = "backchannel"
+version = "0.1.0"
+description = "Talk to a local coding agent from your phone, over a tunnel."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "S", "UP", "B"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.ruff.lint.per-file-ignores]
+# Assertions, fixed sample paths and a dummy token are what a test suite is.
+"tests/*" = ["S101", "S105", "S108"]
