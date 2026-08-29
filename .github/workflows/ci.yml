@@ -26,9 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
+      - uses: actions/setup-python@v5
         with:
-          args: check src tests bin
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: format --check src tests bin
+          python-version: "3.13"
+      - run: pip install ruff==0.16.5
+      - run: ruff check src tests bin README.md
+      - run: ruff format --check src tests bin README.md

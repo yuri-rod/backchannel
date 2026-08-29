@@ -93,8 +93,10 @@ functions:
 ```python
 NAME = "my-agent"
 
+
 def sessions(workspace):
     """Return candidate session file paths. The newest mtime wins."""
+
 
 def parse(path):
     """Return a list of Message(speaker, text, timestamp)."""
