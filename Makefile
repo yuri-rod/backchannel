@@ -6,8 +6,8 @@ export PYTHONPATH := src
 all: check
 
 lint:
-	ruff format --check src tests bin README.md
-	ruff check src tests bin README.md
+	ruff format --check src tests bin/backchannel README.md
+	ruff check src tests bin/backchannel README.md
 
 test:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'

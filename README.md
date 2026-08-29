@@ -41,6 +41,10 @@ $EDITOR ~/.config/backchannel/config.toml   # set bridge.workspace
 ./bin/backchannel mirror &
 ```
 
+`bin/backchannel` runs straight from the clone. If you would rather have it on
+your PATH, `pipx install .` (or `pip install .`) gives you a `backchannel`
+command that works the same from anywhere.
+
 Point a tunnel at port 8686:
 
 ```
