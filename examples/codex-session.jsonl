@@ -1,0 +1,2 @@
+{"type":"event_msg","timestamp":"2000-01-01T00:00:00Z","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"Draft a backup checklist for a sample service."}]}}}
+{"type":"response_item","timestamp":"2000-01-01T00:00:05Z","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"Record the last successful backup, retain seven daily copies, and verify one restore."}]}}

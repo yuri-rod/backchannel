@@ -61,6 +61,38 @@ Then print the link and open it on your phone:
 token. With another tunnel, build the link yourself:
 `https://your-tunnel-host/?k=$(./bin/backchannel token)`.
 
+## Synthetic example
+
+`examples/codex-session.jsonl` contains a fictitious Codex transcript with two messages.
+Render it without reading your real agent history or using a tunnel:
+
+```sh
+demo_dir="$(mktemp -d)"
+cat > "$demo_dir/config.toml" <<EOF
+[bridge]
+agent = "codex"
+workspace = "$(pwd)/examples/codex-session.jsonl"
+title = "Backchannel demo"
+
+[server]
+host = "127.0.0.1"
+port = 8687
+share_root = "$demo_dir/share"
+token_file = "$demo_dir/token"
+EOF
+
+./bin/backchannel --config "$demo_dir/config.toml" mirror --once
+cat "$demo_dir/share/transcript.txt"
+```
+
+To view the result locally, start `./bin/backchannel --config "$demo_dir/config.toml" serve` in another terminal, run `./bin/backchannel --config "$demo_dir/config.toml" token`, then open `http://127.0.0.1:8687/?k=<token>` in your browser. The temporary directory contains the demo transcript and token.
+
+## Operating Backchannel
+
+Keep the server bound to `127.0.0.1`. Start one `serve` process and one `mirror` process with the same config; `serve` handles the browser and inbox, while `mirror` refreshes the transcript. For mobile access, read [SECURITY.md](SECURITY.md) before exposing the local port through a tunnel, then use `backchannel url` to print the tokenized link.
+
+For a supervised service, follow the platform-specific steps in [templates/README.md](templates/README.md). Both templates restart on failure and limit rapid retries. Keep their logs visible when troubleshooting, since a bad config stops startup and a missing session is logged while the mirror keeps polling.
+
 ## Making the agent answer
 
 The page's write side only drops files into the inbox. Something has to watch
