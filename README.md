@@ -150,4 +150,4 @@ capacity, timeout, and filename-conflict coverage;
 [transcript/__init__.py](src/backchannel/transcript/__init__.py). Include
 synthetic selection and redaction tests with adapter changes.
 
-MIT. See [LICENSE](LICENSE).
+See [CHANGELOG.md](CHANGELOG.md) for version history. Licensed under [MIT](LICENSE).
