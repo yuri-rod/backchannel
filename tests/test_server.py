@@ -1,8 +1,9 @@
 from http.client import HTTPConnection
 from pathlib import Path
 import tempfile
-from threading import Thread
+from threading import Event, Thread
 import unittest
+from unittest.mock import patch
 
 from backchannel import server
 from backchannel.config import Config
@@ -65,6 +66,9 @@ class AuthTests(ServerCase):
     def test_a_wrong_token_is_refused(self):
         self.assertEqual(self.get("/?k=wrong")[0], 404)
         self.assertEqual(self.get(f"/?k={TOKEN}x")[0], 404)
+
+    def test_a_non_ascii_token_is_refused_without_dropping_the_connection(self):
+        self.assertEqual(self.get("/?k=%C3%A9")[0], 404)
 
     def test_an_unknown_route_is_refused_even_with_the_token(self):
         self.assertEqual(self.get(f"/etc/passwd?k={TOKEN}")[0], 404)
@@ -139,6 +143,48 @@ class UploadTests(ServerCase):
         self.send("note.txt")
 
         self.assertEqual((self.inbox / "note.txt").stat().st_mode & 0o777, 0o600)
+
+    def test_repeated_names_do_not_replace_a_pending_file(self):
+        self.send("note.txt", b"first message")
+
+        response, _ = self.send("note.txt", b"replacement")
+
+        self.assertEqual(response.status, 409)
+        self.assertEqual((self.inbox / "note.txt").read_bytes(), b"first message")
+        self.assertEqual([p.name for p in self.inbox.iterdir()], ["note.txt"])
+
+    def test_an_existing_directory_is_a_conflict_without_a_partial_file(self):
+        (self.inbox / "folder").mkdir()
+
+        response, _ = self.send("folder")
+
+        self.assertEqual(response.status, 409)
+        self.assertEqual([p.name for p in self.inbox.iterdir()], ["folder"])
+
+    def test_in_flight_upload_reserves_capacity_before_reading_the_body(self):
+        for index in range(2):
+            self.send(f"existing-{index}.txt")
+        started, release = Event(), Event()
+        drain = server.BridgeHandler._drain
+
+        def held_drain(handler, declared, target):
+            started.set()
+            release.wait(3)
+            return drain(handler, declared, target)
+
+        with patch.object(server.BridgeHandler, "_drain", held_drain):
+            first = Thread(target=self.send, args=("first.txt",), daemon=True)
+            first.start()
+            try:
+                self.assertTrue(started.wait(2))
+                response, _ = self.send("second.txt")
+                self.assertEqual(response.status, 429)
+            finally:
+                release.set()
+                first.join(5)
+        self.assertFalse(first.is_alive())
+        self.assertEqual((self.inbox / "first.txt").read_bytes(), b"payload")
+        self.assertEqual(len(list(self.inbox.iterdir())), 3)
 
     def test_refuses_an_unsafe_name(self):
         for name in ("../escape.txt", "%2e%2e%2fescape", ".hidden", ""):

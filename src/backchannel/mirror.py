@@ -53,6 +53,8 @@ def run(config, once=False, log=sys.stderr):
         except (TranscriptError, OSError) as error:
             log.write(f"mirror: {error}\n")
             log.flush()
+            if once:
+                return 1
         if once:
             return 0
         time.sleep(config.poll_seconds)

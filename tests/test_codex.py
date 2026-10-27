@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from backchannel.models import AGENT, YOU
 from backchannel.transcript import codex
@@ -99,6 +100,40 @@ class ParseTests(unittest.TestCase):
 
 
 class SessionsTests(unittest.TestCase):
+    def test_global_discovery_only_returns_the_requested_workspace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "wanted"
+            workspace.mkdir()
+            sessions = root / "sessions"
+            sessions.mkdir()
+            wanted = sessions / "rollout-wanted.jsonl"
+            unrelated = sessions / "rollout-unrelated.jsonl"
+            for path, cwd in ((wanted, workspace), (unrelated, root / "other")):
+                path.write_text(
+                    json.dumps({"type": "session_meta", "payload": {"cwd": str(cwd)}}) + "\n",
+                    encoding="utf-8",
+                )
+
+            with patch.object(codex, "SESSIONS_DIR", sessions):
+                self.assertEqual(codex.sessions(workspace), [wanted])
+                self.assertEqual(codex.sessions(root / "missing"), [])
+
+    def test_global_discovery_ignores_missing_or_invalid_workspace_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "project"
+            workspace.mkdir()
+            sessions = root / "sessions"
+            sessions.mkdir()
+            for index, body in enumerate(
+                ("not json", "null", "{}", '{"type":"session_meta","payload":null}')
+            ):
+                (sessions / f"rollout-{index}.jsonl").write_text(body, encoding="utf-8")
+
+            with patch.object(codex, "SESSIONS_DIR", sessions):
+                self.assertEqual(codex.sessions(workspace), [])
+
     def test_a_rollout_file_is_used_directly(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "rollout-2026-08-28-abc.jsonl"

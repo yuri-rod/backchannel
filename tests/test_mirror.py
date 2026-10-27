@@ -70,8 +70,9 @@ class RunTests(MirrorCase):
     def test_reports_a_workspace_with_no_session_instead_of_crashing(self):
         log = io.StringIO()
 
-        mirror.run(self.config, once=True, log=log)
+        status = mirror.run(self.config, once=True, log=log)
 
+        self.assertEqual(status, 1)
         self.assertIn("no Claude Code project directory", log.getvalue())
         self.assertFalse(self.config.transcript_file.exists())
 

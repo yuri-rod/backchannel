@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import tempfile
+from threading import Lock
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -28,6 +30,7 @@ class BridgeServer(ThreadingHTTPServer):
         super().__init__(address, handler)
         self.config = config
         self.token = token
+        self.upload_lock = Lock()
 
 
 class BridgeHandler(BaseHTTPRequestHandler):
@@ -63,7 +66,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _authorized(self, query):
         offered = (query.get("k") or [""])[0]
-        if secrets.compare_digest(offered, self.server.token):
+        if secrets.compare_digest(offered.encode("utf-8"), self.server.token.encode("utf-8")):
             return True
         time.sleep(AUTH_DELAY_SECONDS)
         self._not_found()
@@ -103,29 +106,39 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return
 
         inbox = config.inbox
-        inbox.mkdir(parents=True, exist_ok=True)
-        if sum(1 for _ in inbox.iterdir()) >= config.max_pending_uploads:
-            self._error(429, "too many pending files")
-            return
-
-        temporary = inbox / f".upload-{secrets.token_hex(8)}"
+        temporary = None
         try:
-            written = self._drain(declared, temporary)
+            # Reserve a slot before another request checks the capacity. Slow
+            # bodies stream outside the lock, but their temporary files count.
+            with self.server.upload_lock:
+                inbox.mkdir(parents=True, exist_ok=True)
+                if sum(1 for _ in inbox.iterdir()) >= config.max_pending_uploads:
+                    self._error(429, "too many pending files")
+                    return
+                handle, name_on_disk = tempfile.mkstemp(dir=inbox, prefix=".upload-")
+                temporary = Path(name_on_disk)
+            written = self._drain(declared, handle)
+            # Linking publishes the complete file atomically and refuses an
+            # existing name, including a symlink, without overwriting it.
+            os.link(temporary, inbox / name)
+        except FileExistsError:
+            self._error(409, "file name already pending; choose another name")
+            return
         except (TimeoutError, OSError) as error:
-            temporary.unlink(missing_ok=True)
             if isinstance(error, TimeoutError):
                 self._error(408, "upload did not finish in time")
             else:
                 self._error(500, f"could not store the file: {error.strerror}")
             return
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
-        os.replace(temporary, inbox / name)
         self._send(200, f"received: {name} ({written} bytes)\n", "text/plain")
 
-    def _drain(self, declared, target):
+    def _drain(self, declared, handle):
         deadline = time.monotonic() + UPLOAD_DEADLINE_SECONDS
         written = 0
-        handle = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(handle, "wb") as sink:
             while written < declared:
                 if time.monotonic() > deadline:

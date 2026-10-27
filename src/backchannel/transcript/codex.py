@@ -10,17 +10,37 @@ ASSISTANT_PHASES = {"commentary", "final_answer"}
 
 
 def sessions(workspace):
-    # Codex keys rollouts by thread id, not by workspace, so the workspace is
-    # only a hint: point `workspace` at a rollout file or at a directory of
-    # them, otherwise the whole sessions tree is searched.
     workspace = Path(workspace).expanduser()
     if workspace.is_file():
         return [workspace]
-    for root in (workspace, SESSIONS_DIR):
-        found = sorted(root.rglob("rollout-*.jsonl")) if root.is_dir() else []
-        if found:
-            return [path for path in found if not path.is_symlink()]
-    return []
+    if not workspace.is_dir():
+        return []
+    found = sorted(workspace.rglob("rollout-*.jsonl"))
+    if found:
+        return [path for path in found if not path.is_symlink()]
+    return [
+        path
+        for path in sorted(SESSIONS_DIR.rglob("rollout-*.jsonl"))
+        if not path.is_symlink() and _matches_workspace(path, workspace.resolve())
+    ]
+
+
+def _matches_workspace(path, workspace):
+    # Discovery reads only the metadata header, never another project's messages.
+    try:
+        with path.open(encoding="utf-8") as handle:
+            record = json.loads(handle.readline(64 * 1024))
+        if not isinstance(record, dict) or record.get("type") != "session_meta":
+            return False
+        payload = record.get("payload")
+        cwd = payload.get("cwd") if isinstance(payload, dict) else None
+        return (
+            isinstance(cwd, str)
+            and Path(cwd).is_absolute()
+            and Path(cwd).resolve() == workspace
+        )
+    except (OSError, ValueError):
+        return False
 
 
 def parse(path):
