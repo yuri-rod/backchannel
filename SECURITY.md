@@ -1,78 +1,78 @@
 # Security
 
-Read this before you point a tunnel at the server. The threat model is unusual:
-the page publishes a transcript of an AI coding session, and the write side
-hands files to an agent that is running with your permissions.
+Backchannel serves a coding-session transcript and accepts files for an agent
+running with your permissions. Review both the session contents and the
+agent's inbox instructions before enabling remote access.
 
-## What protects the URL
+## Shared token
 
-One token. `secrets.token_urlsafe(18)` is 144 bits, compared with
-`secrets.compare_digest`, and every route refuses without it. A wrong token gets
-the same `404` as a wrong path, after a short pause, so the URL gives away
-nothing about whether it is a live instance.
+Every page, transcript, and upload request requires one token, generated with
+`secrets.token_urlsafe(18)` and compared with `secrets.compare_digest`.
+Missing or wrong tokens receive HTTP 404 after a short delay. The delay is not
+network rate limiting.
 
-There is no session, no login and no second factor. **Anyone holding the URL has
-everything.** Treat it like an SSH key, not like a password.
+Anyone holding the URL can read the transcript and submit input. There are no
+separate users, sessions, or second factor. Keep the link private. To rotate
+the token, delete its file and restart the server; existing links stop working.
 
-## The token is in the query string
+The token travels in the query string, so it appears in browser history and
+may appear in tunnel logs. Responses send `Cache-Control: no-store` and
+`Referrer-Policy: no-referrer`. The page also includes a referrer meta tag and a
+Content Security Policy restricting requests to its own origin. These headers
+do not remove the URL from history or tunnel logs.
 
-That is a real trade-off, taken so the link works from a phone lock screen with
-no typing. The consequences:
+## Session selection and filtering
 
-- It lands in the browser history of every device you open it on.
-- It lands in the logs of whatever tunnel you use.
-- It would leak through a `Referer` header on any outbound link.
+Codex workspace discovery checks the metadata `cwd` before choosing from the
+global sessions directory. Missing, malformed, or oversized metadata does not
+match. An explicit rollout file or directory remains an explicit selection.
+Use a file path to pin one session rather than following the newest match.
 
-Mitigations in the code: `Referrer-Policy: no-referrer` and a `<meta>` referrer
-tag, `Cache-Control: no-store` on every response, and the token is read from
-`location.search` rather than written into the page body. A `Content-Security-
-Policy` blocks outbound requests to anything but the server's own origin.
+The Claude Code parser drops sidechain and metadata records, non-text content
+blocks such as thinking and tool results, and these harness tags:
 
-To rotate: delete the token file and restart. Every old link dies.
+- `system-reminder`
+- `command-name`, `command-message`, `command-args`
+- `local-command-stdout`, `local-command-caveat`
+- `bash-input`, `bash-stdout`, `bash-stderr`
 
-## The transcript is the sensitive part
+The Codex parser keeps supported user-message events and assistant prose in
+`commentary` and `final_answer` phases. Other records are excluded.
+[Claude redaction tests](tests/test_claude_code.py) and
+[Codex selection and parsing tests](tests/test_codex.py) use synthetic records.
+Add equivalent tests when changing or adding an adapter.
 
-`mirror` renders the agent's own session file. Before anything reaches the page
-it drops, in this order:
+Filtering does not remove credentials or other sensitive information typed
+into an ordinary message. Do not mirror sessions containing information you
+cannot share with every holder of the URL.
 
-- Records marked `isSidechain` or `isMeta` (subagent traffic, harness bookkeeping)
-- Every content block that is not prose: `thinking`, `tool_use`, `tool_result`
-- `<system-reminder>...</system-reminder>` blocks
-- `<command-name>`, `<command-message>`, `<command-args>`,
-  `<local-command-stdout>`, `<local-command-caveat>`, `<bash-input>`,
-  `<bash-stdout>`, `<bash-stderr>`
+## Uploads and agent permissions
 
-`tests/test_claude_code.py::RedactionTests` pins all of it. If you add an
-adapter, add the equivalent tests before you run it against anything real.
+`POST /send` requires the token, an ASCII filename without separators or a
+leading dot, and a positive `Content-Length` within the configured size limit.
+In-flight uploads reserve inbox capacity before reading their bodies. Requests
+have a 30-second socket timeout and uploads have a five-minute deadline.
 
-This still leaves whatever you and the agent said to each other in plain prose.
-If you paste a credential into a chat, the mirror will publish it. **Do not run
-this against a session that handles material you would not put on a public URL.**
+Bodies stream to private `0600` temporary files and become visible under the
+requested name only after completion. Truncated uploads are removed. Existing
+names return HTTP 409 without replacing pending files; choose a different name
+or move processed files out of the inbox. Atomic publication requires a
+filesystem that supports hard links. Run only one server process per inbox.
 
-## The write side
+The server stores input; the inbox watcher tells the agent how to act on it.
+An uploaded file can contain prompt injection. Restrict the agent's filesystem
+and tool permissions to what that session needs. HTTP validation cannot control
+what the agent does after reading an accepted file.
 
-`POST /send` writes into an inbox directory that your agent is told to read and
-act on. That is, by design, remote input to a process with your shell. The
-server constrains it to: a token, a filename matching
-`^[A-Za-z0-9][A-Za-z0-9._ -]{0,126}[A-Za-z0-9]$` (no traversal, no dotfiles), a
-size ceiling, a cap on pending files, a 30-second socket timeout and a 5-minute
-upload deadline. Bodies stream to a `0600` temporary file and are renamed into
-place only once complete, so a truncated upload never becomes a visible file.
+## Network binding
 
-What the server cannot constrain is what the agent does with the content. The
-inbox is untrusted input reaching a tool-using agent: prompt injection in an
-uploaded file is a live risk, and no amount of HTTP validation fixes it. Keep
-the agent's own permissions tight.
-
-## Binding
-
-`host` defaults to `127.0.0.1` and should stay there. The server speaks plain
-HTTP with no TLS and no rate limiting on the network path. It is meant to sit
-behind a tunnel (ngrok, Cloudflare Tunnel, Tailscale Funnel) that terminates TLS
-for it. Binding it to `0.0.0.0` puts an unauthenticated-by-network,
-token-only, cleartext service on your LAN. Unsupported.
+The default is `127.0.0.1`. Keep it there. The server speaks plain HTTP and is
+intended to sit behind a tunnel that terminates TLS for remote access. Binding
+to `0.0.0.0` exposes token-protected traffic in cleartext on the LAN and is
+unsupported.
 
 ## Reporting
 
-Open a GitHub issue for anything non-sensitive. For a vulnerability that should
-not be public, use GitHub's private security advisory form on this repository.
+Use GitHub issues for non-sensitive reports. Report vulnerabilities through
+this repository's private security advisory form. Do not include real tokens,
+private transcripts, or customer data in a public report.
