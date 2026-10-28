@@ -73,6 +73,11 @@ class ParseTests(unittest.TestCase):
     def test_skips_records_that_carry_no_prose(self):
         self.assertEqual(self.parse([user("   "), assistant([])]), [])
 
+    def test_skips_nonobject_json_records(self):
+        messages = self.parse([None, [], 42, "metadata", user("kept")])
+
+        self.assertEqual([m.text for m in messages], ["kept"])
+
     def test_survives_a_truncated_last_line(self):
         path = self.root / "session.jsonl"
         path.write_text(

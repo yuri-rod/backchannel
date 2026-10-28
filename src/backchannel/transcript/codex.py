@@ -53,7 +53,6 @@ def parse(path):
 
 
 def _records(path):
-    records = []
     with Path(path).open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             line = line.strip()
@@ -64,8 +63,7 @@ def _records(path):
             except ValueError:
                 continue
             if isinstance(record, dict):
-                records.append(record)
-    return records
+                yield record
 
 
 def _message(record):

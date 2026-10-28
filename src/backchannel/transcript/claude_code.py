@@ -46,18 +46,18 @@ def parse(path):
 
 
 def _records(path):
-    records = []
     with Path(path).open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             line = line.strip()
             if not line:
                 continue
             try:
-                records.append(json.loads(line))
+                record = json.loads(line)
             except ValueError:
                 # A live session's last line is often half-written.
                 continue
-    return records
+            if isinstance(record, dict):
+                yield record
 
 
 def _messages(records):
