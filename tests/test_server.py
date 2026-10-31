@@ -70,6 +70,15 @@ class AuthTests(ServerCase):
     def test_a_non_ascii_token_is_refused_without_dropping_the_connection(self):
         self.assertEqual(self.get("/?k=%C3%A9")[0], 404)
 
+    def test_authorization_header_accepted(self):
+        response, body = self.request("GET", "/", headers={"Authorization": f"Bearer {TOKEN}"})
+        self.assertEqual(response.status, 200)
+        self.assertIn('id="body"', body)
+
+    def test_invalid_authorization_header_refused(self):
+        response, _ = self.request("GET", "/", headers={"Authorization": "Bearer bad-token"})
+        self.assertEqual(response.status, 404)
+
     def test_an_unknown_route_is_refused_even_with_the_token(self):
         self.assertEqual(self.get(f"/etc/passwd?k={TOKEN}")[0], 404)
         self.assertEqual(self.get(f"/../token?k={TOKEN}")[0], 404)

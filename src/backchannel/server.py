@@ -66,6 +66,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _authorized(self, query):
         offered = (query.get("k") or [""])[0]
+        if not offered:
+            auth_header = self.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                offered = auth_header[7:].strip()
         if secrets.compare_digest(offered.encode("utf-8"), self.server.token.encode("utf-8")):
             return True
         time.sleep(AUTH_DELAY_SECONDS)
