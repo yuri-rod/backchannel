@@ -106,6 +106,21 @@ class LoadTests(unittest.TestCase):
         with self.assertRaises(configuration.ConfigError):
             configuration.load(self.write("[server\nport = 1\n"), environ={})
 
+    def test_strict_auth_configuration(self):
+        settings_default = configuration.load(self.path, environ={})
+        self.assertFalse(settings_default.strict_auth)
+
+        settings_file = configuration.load(
+            self.write("[server]\nstrict_auth = true\n"), environ={}
+        )
+        self.assertTrue(settings_file.strict_auth)
+
+        settings_env = configuration.load(self.path, environ={"BACKCHANNEL_STRICT_AUTH": "1"})
+        self.assertTrue(settings_env.strict_auth)
+
+        with self.assertRaises(configuration.ConfigError):
+            configuration.load(self.path, environ={"BACKCHANNEL_STRICT_AUTH": "not-a-bool"})
+
 
 if __name__ == "__main__":
     unittest.main()

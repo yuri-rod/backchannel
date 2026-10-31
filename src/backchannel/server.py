@@ -42,11 +42,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route, query = self._route()
-        if not self._authorized(query):
-            return
         if route == "/":
             self._send(200, self._page(), "text/html")
-        elif route == "/transcript.txt":
+            return
+        if not self._authorized(query):
+            return
+        if route == "/transcript.txt":
             self._send(200, self._transcript(), "text/plain")
         else:
             self._not_found()
@@ -65,12 +66,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
         return parts.path.rstrip("/") or "/", parse_qs(parts.query)
 
     def _authorized(self, query):
-        offered = (query.get("k") or [""])[0]
-        if not offered:
-            auth_header = self.headers.get("Authorization", "")
-            if auth_header.startswith("Bearer "):
-                offered = auth_header[7:].strip()
-        if secrets.compare_digest(offered.encode("utf-8"), self.server.token.encode("utf-8")):
+        offered = ""
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            offered = auth_header[7:].strip()
+        elif not getattr(self.server.config, "strict_auth", False):
+            offered = (query.get("k") or [""])[0]
+        if offered and secrets.compare_digest(
+            offered.encode("utf-8"), self.server.token.encode("utf-8")
+        ):
             return True
         time.sleep(AUTH_DELAY_SECONDS)
         self._not_found()

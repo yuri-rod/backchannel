@@ -21,6 +21,7 @@ SECTIONS = {
     "token_file": "server",
     "max_upload_bytes": "server",
     "max_pending_uploads": "server",
+    "strict_auth": "server",
     "poll_seconds": "mirror",
     "timezone": "mirror",
 }
@@ -46,6 +47,7 @@ class Config:
     token_file: Path = Path("~/.backchannel/token")
     max_upload_bytes: int = 100 * 1024 * 1024
     max_pending_uploads: int = 20
+    strict_auth: bool = False
 
     poll_seconds: float = 2.0
     timezone: str = "local"
@@ -129,6 +131,17 @@ def _build(values):
 def _coerce(name, raw, annotation):
     if name in PATH_FIELDS:
         return Path(raw).expanduser()
+    if annotation is bool or annotation == "bool":
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            val = raw.strip().lower()
+            if val in ("1", "true", "yes", "on"):
+                return True
+            if val in ("0", "false", "no", "off"):
+                return False
+            raise ConfigError(f"{name} must be a boolean: {raw!r}")
+        return bool(raw)
     try:
         if annotation is int or annotation == "int":
             return int(raw)

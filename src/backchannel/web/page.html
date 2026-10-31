@@ -49,7 +49,19 @@
   <b>__TITLE__</b>
   <span id="stamp">loading...</span>
   <a id="download" href="#" download="transcript.txt">download</a>
+  <a id="auth-link" href="#">key</a>
 </header>
+<div id="auth-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; z-index:100; padding:16px;">
+  <form id="auth-form" style="background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; max-width:380px; width:100%; display:grid; gap:12px;">
+    <b style="font-size:14px;">Access key</b>
+    <span style="font-size:12px; color:var(--muted);">Saved in session storage, not the URL bar.</span>
+    <input type="password" id="auth-input" placeholder="Paste token" style="padding:8px 10px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:inherit; font:13px ui-monospace, monospace;">
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" id="auth-cancel" style="background:transparent; border:1px solid var(--line); color:inherit; padding:6px 12px; font-size:13px; font-weight:normal;">Cancel</button>
+      <button type="submit" style="padding:6px 14px; font-size:13px;">Save</button>
+    </div>
+  </form>
+</div>
 <div id="body"></div>
 <footer>
   <textarea id="text" placeholder="type or paste what you want to send"></textarea>
@@ -63,7 +75,7 @@
   const YOU = __YOU_JSON__;
   const AGENT = __AGENT_JSON__;
   const params = new URLSearchParams(location.search);
-  const KEY = params.get('k') || sessionStorage.getItem('backchannel_key') || '';
+  let KEY = params.get('k') || sessionStorage.getItem('backchannel_key') || '';
   if (KEY) {
     sessionStorage.setItem('backchannel_key', KEY);
     if (params.has('k')) {
@@ -73,7 +85,45 @@
     }
   }
 
-  const authHeaders = KEY ? { 'Authorization': 'Bearer ' + KEY } : {};
+  function authHeaders() {
+    return KEY ? { 'Authorization': 'Bearer ' + KEY } : {};
+  }
+
+  const modal = document.getElementById('auth-modal');
+  const authInput = document.getElementById('auth-input');
+
+  function openAuthModal() {
+    authInput.value = KEY;
+    modal.style.display = 'flex';
+    authInput.focus();
+  }
+
+  function closeAuthModal() {
+    modal.style.display = 'none';
+  }
+
+  document.getElementById('auth-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    openAuthModal();
+  });
+
+  document.getElementById('auth-cancel').addEventListener('click', closeAuthModal);
+
+  document.getElementById('auth-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = authInput.value.trim();
+    if (val) {
+      KEY = val;
+      sessionStorage.setItem('backchannel_key', KEY);
+      closeAuthModal();
+      tick();
+    }
+  });
+
+  if (!KEY) {
+    openAuthModal();
+  }
+
   const body = document.getElementById('body');
   const stamp = document.getElementById('stamp');
   const status = document.getElementById('status');
@@ -83,7 +133,7 @@
   document.getElementById('download').addEventListener('click', async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('/transcript.txt', { headers: authHeaders, cache: 'no-store' });
+      const res = await fetch('/transcript.txt', { headers: authHeaders(), cache: 'no-store' });
       if (!res.ok) throw new Error(res.status);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -121,9 +171,13 @@
   }
 
   async function tick() {
+    if (!KEY) {
+      stamp.textContent = 'key required (click key)';
+      return;
+    }
     try {
       const res = await fetch('/transcript.txt?t=' + Date.now(), {
-        headers: authHeaders,
+        headers: authHeaders(),
         cache: 'no-store'
       });
       if (!res.ok) throw new Error(res.status);
@@ -144,7 +198,7 @@
     const target = '/send?name=' + encodeURIComponent(name);
     const res = await fetch(target, {
       method: 'POST',
-      headers: authHeaders,
+      headers: authHeaders(),
       body: content
     });
     if (!res.ok) throw new Error(name + ': ' + res.status);

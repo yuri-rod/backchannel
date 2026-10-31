@@ -102,7 +102,12 @@ link. With another tunnel, append `?k=<token>` to its URL; `backchannel token`
 prints the token.
 
 Anyone holding that link can read the transcript and write to the inbox.
-Tokens appear in browser history and may appear in tunnel logs. Keep them out
+Tokens in query strings appear in browser history and may appear in tunnel logs.
+To prevent this, the web client saves the token into session storage and removes
+`?k=` from the URL bar on initial load. Users can also open the page directly
+and enter the token in the web interface. In production or shared tunnels, pass
+`--strict-auth` or set `strict_auth = true` in config to reject query parameter
+tokens entirely and require `Authorization: Bearer` headers. Keep tokens out
 of issue reports, screenshots, and commits.
 
 [agent/watch-inbox.md](agent/watch-inbox.md) contains a watcher instruction.
