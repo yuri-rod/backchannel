@@ -150,4 +150,14 @@ capacity, timeout, and filename-conflict coverage;
 [transcript/__init__.py](src/backchannel/transcript/__init__.py). Include
 synthetic selection and redaction tests with adapter changes.
 
+## Technical roadmap
+
+Realistic planned engineering milestones:
+
+1. Server-Sent Events (SSE) live transcript streaming (10 hours): Add an `/events` streaming endpoint so mobile browsers receive transcript deltas immediately as the agent writes them, replacing periodic polling.
+2. Multi-workspace directory router (8 hours): Enable a single server instance to route between multiple configured agent workspaces via clean path prefixes.
+3. Quick-action mobile reply buttons (6 hours): Provide customizable quick-action prompts in the web interface (such as approving shell execution or continuing the next step) for one-tap agent interactions.
+
+## License
+
 See [CHANGELOG.md](CHANGELOG.md) for version history. Licensed under [MIT](LICENSE).
