@@ -42,11 +42,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route, query = self._route()
-        if not self._authorized(query):
-            return
         if route == "/":
             self._send(200, self._page(), "text/html")
-        elif route == "/transcript.txt":
+            return
+        if not self._authorized(query):
+            return
+        if route == "/transcript.txt":
             self._send(200, self._transcript(), "text/plain")
         else:
             self._not_found()

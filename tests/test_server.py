@@ -52,31 +52,36 @@ class ServerCase(unittest.TestCase):
 
 
 class AuthTests(ServerCase):
-    def test_every_route_needs_the_token(self):
+    def test_session_routes_require_authorization(self):
         for method, path in (
-            ("GET", "/"),
             ("GET", "/transcript.txt"),
             ("POST", "/send?name=note.txt"),
         ):
             with self.subTest(path=path):
                 response, _ = self.request(method, path, body=b"x")
-
                 self.assertEqual(response.status, 404)
 
-    def test_a_wrong_token_is_refused(self):
-        self.assertEqual(self.get("/?k=wrong")[0], 404)
-        self.assertEqual(self.get(f"/?k={TOKEN}x")[0], 404)
-
-    def test_a_non_ascii_token_is_refused_without_dropping_the_connection(self):
-        self.assertEqual(self.get("/?k=%C3%A9")[0], 404)
-
-    def test_authorization_header_accepted(self):
-        response, body = self.request("GET", "/", headers={"Authorization": f"Bearer {TOKEN}"})
+    def test_page_accessible_without_token(self):
+        response, body = self.request("GET", "/")
         self.assertEqual(response.status, 200)
+        self.assertIn('id="auth-modal"', body)
         self.assertIn('id="body"', body)
 
+    def test_a_wrong_token_is_refused(self):
+        self.assertEqual(self.get("/transcript.txt?k=wrong")[0], 404)
+        self.assertEqual(self.get(f"/transcript.txt?k={TOKEN}x")[0], 404)
+
+    def test_a_non_ascii_token_is_refused_without_dropping_the_connection(self):
+        self.assertEqual(self.get("/transcript.txt?k=%C3%A9")[0], 404)
+
+    def test_authorization_header_accepted(self):
+        headers = {"Authorization": f"Bearer {TOKEN}"}
+        response, body = self.request("GET", "/transcript.txt", headers=headers)
+        self.assertEqual(response.status, 200)
+
     def test_invalid_authorization_header_refused(self):
-        response, _ = self.request("GET", "/", headers={"Authorization": "Bearer bad-token"})
+        headers = {"Authorization": "Bearer bad-token"}
+        response, _ = self.request("GET", "/transcript.txt", headers=headers)
         self.assertEqual(response.status, 404)
 
     def test_an_unknown_route_is_refused_even_with_the_token(self):
@@ -287,15 +292,38 @@ class StrictAuthTests(ServerCase):
         Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.shutdown)
 
-    def test_strict_auth_rejects_query_token_on_all_endpoints(self):
+    def test_strict_auth_rejects_query_tokens_on_protected_endpoints(self):
         for method, path in (
-            ("GET", f"/?k={TOKEN}"),
             ("GET", f"/transcript.txt?k={TOKEN}"),
             ("POST", f"/send?k={TOKEN}&name=note.txt"),
         ):
             with self.subTest(path=path):
                 response, _ = self.request(method, path, body=b"hello")
                 self.assertEqual(response.status, 404)
+
+    def test_strict_auth_browser_flow(self):
+        # 1. Fresh browser navigation to GET / loads the login page without credentials
+        response, body = self.request("GET", "/")
+        self.assertEqual(response.status, 200)
+        self.assertIn('id="auth-modal"', body)
+        self.assertIn('id="body"', body)
+
+        # 2. Protected transcript endpoint refuses unauthenticated and query-string attempts
+        response, _ = self.request("GET", "/transcript.txt")
+        self.assertEqual(response.status, 404)
+        response, _ = self.request("GET", f"/transcript.txt?k={TOKEN}")
+        self.assertEqual(response.status, 404)
+
+        # 3. Supplying Bearer authorization unlocks reading transcript and sending uploads
+        headers = {"Authorization": f"Bearer {TOKEN}"}
+        response, _ = self.request("GET", "/transcript.txt", headers=headers)
+        self.assertEqual(response.status, 200)
+
+        response, _ = self.request(
+            "POST", "/send?name=browser.txt", body=b"hello from browser", headers=headers
+        )
+        self.assertEqual(response.status, 200)
+        self.assertTrue((self.inbox / "browser.txt").exists())
 
     def test_strict_auth_accepts_bearer_header_on_all_endpoints(self):
         headers = {"Authorization": f"Bearer {TOKEN}"}
