@@ -33,6 +33,9 @@ token_file = "~/.backchannel/token"
 max_upload_bytes = 104857600
 max_pending_uploads = 20
 
+# Set to true to reject ?k= query parameter tokens and require Authorization: Bearer headers.
+strict_auth = false
+
 [mirror]
 poll_seconds = 2.0
 

@@ -19,8 +19,15 @@ Requests authenticate using an `Authorization: Bearer <token>` header or a
 fallback `?k=<token>` query parameter. When accessed through a browser with `?k=`,
 the web client saves the token to session storage, strips the query parameter
 from the address bar using `history.replaceState`, and executes all subsequent
-transcript polling and uploads using `Authorization: Bearer` headers. Direct query
-string tokens are deprecated for API calls.
+transcript polling and uploads using `Authorization: Bearer` headers. If accessed
+without a token, the client presents an in-page token entry prompt, storing the
+key in session storage without exposing it in the URL bar.
+
+To reject query parameter tokens entirely in exposed or production deployments,
+enable strict authentication mode via `strict_auth = true` in `config.toml`,
+`BACKCHANNEL_STRICT_AUTH=1` in the environment, or `backchannel serve --strict-auth`.
+In strict mode, all query string tokens receive HTTP 404 and only valid `Authorization: Bearer`
+headers are accepted.
 
 Responses send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. The
 page also includes a referrer meta tag and a Content Security Policy restricting

@@ -91,6 +91,14 @@ class AuthTests(ServerCase):
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(server.load_token(path), token)
 
+    def test_query_token_fallback_allowed_when_strict_auth_disabled(self):
+        status, _ = self.get(f"/transcript.txt?k={TOKEN}")
+        self.assertEqual(status, 200)
+
+        response, _ = self.request("POST", f"/send?k={TOKEN}&name=query_auth.txt", body=b"test")
+        self.assertEqual(response.status, 200)
+        self.assertTrue((self.inbox / "query_auth.txt").exists())
+
 
 class PageTests(ServerCase):
     def test_serves_the_composer_and_the_transcript_view(self):
@@ -251,6 +259,59 @@ class UploadTests(ServerCase):
 
         self.assertEqual(response.status, 408)
         self.assertEqual(list(self.inbox.iterdir()), [])
+
+
+class StrictAuthTests(ServerCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.config = Config(
+            share_root=self.root,
+            token_file=self.root / "token",
+            title="Night Shift",
+            you_label="ME",
+            agent_label="BOT",
+            max_pending_uploads=3,
+            max_upload_bytes=1024,
+            strict_auth=True,
+        )
+        self.inbox = self.config.inbox
+        self.inbox.mkdir(parents=True)
+
+        self.addCleanup(setattr, server.BridgeHandler, "timeout", server.BridgeHandler.timeout)
+        server.BridgeHandler.timeout = 1
+
+        self.server = server.build_server(self.config, token=TOKEN, port=0)
+        self.addCleanup(self.server.server_close)
+        Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.shutdown)
+
+    def test_strict_auth_rejects_query_token_on_all_endpoints(self):
+        for method, path in (
+            ("GET", f"/?k={TOKEN}"),
+            ("GET", f"/transcript.txt?k={TOKEN}"),
+            ("POST", f"/send?k={TOKEN}&name=note.txt"),
+        ):
+            with self.subTest(path=path):
+                response, _ = self.request(method, path, body=b"hello")
+                self.assertEqual(response.status, 404)
+
+    def test_strict_auth_accepts_bearer_header_on_all_endpoints(self):
+        headers = {"Authorization": f"Bearer {TOKEN}"}
+
+        response, body = self.request("GET", "/", headers=headers)
+        self.assertEqual(response.status, 200)
+        self.assertIn('id="body"', body)
+
+        response, _ = self.request("GET", "/transcript.txt", headers=headers)
+        self.assertEqual(response.status, 200)
+
+        response, _ = self.request(
+            "POST", "/send?name=note.txt", body=b"payload", headers=headers
+        )
+        self.assertEqual(response.status, 200)
+        self.assertTrue((self.inbox / "note.txt").exists())
 
 
 if __name__ == "__main__":

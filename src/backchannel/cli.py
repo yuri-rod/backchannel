@@ -16,7 +16,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="backchannel")
     parser.add_argument("--config", help="path to config.toml")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("serve", help="run the HTTP server")
+    serve_command = commands.add_parser("serve", help="run the HTTP server")
+    serve_command.add_argument(
+        "--strict-auth",
+        action="store_true",
+        help="reject query tokens and require Authorization: Bearer header",
+    )
     mirror_command = commands.add_parser("mirror", help="mirror the agent transcript")
     mirror_command.add_argument("--once", action="store_true")
     commands.add_parser("token", help="print the share token, creating it if needed")
@@ -31,6 +36,10 @@ def main(argv=None):
         return 2
 
     if options.command == "serve":
+        if getattr(options, "strict_auth", False):
+            from dataclasses import replace
+
+            settings = replace(settings, strict_auth=True)
         sys.stderr.write(f"backchannel on {settings.host}:{settings.port}\n")
         sys.stderr.flush()
         return server.run(settings)
