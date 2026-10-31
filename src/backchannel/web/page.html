@@ -62,15 +62,40 @@
 <script>
   const YOU = __YOU_JSON__;
   const AGENT = __AGENT_JSON__;
-  const KEY = new URLSearchParams(location.search).get('k') || '';
-  const SOURCE = '/transcript.txt?k=' + encodeURIComponent(KEY);
+  const params = new URLSearchParams(location.search);
+  const KEY = params.get('k') || sessionStorage.getItem('backchannel_key') || '';
+  if (KEY) {
+    sessionStorage.setItem('backchannel_key', KEY);
+    if (params.has('k')) {
+      params.delete('k');
+      const cleanUrl = location.pathname + (params.toString() ? '?' + params.toString() : '');
+      history.replaceState(null, '', cleanUrl);
+    }
+  }
 
+  const authHeaders = KEY ? { 'Authorization': 'Bearer ' + KEY } : {};
   const body = document.getElementById('body');
   const stamp = document.getElementById('stamp');
   const status = document.getElementById('status');
   const button = document.getElementById('send');
-  document.getElementById('download').href = SOURCE;
   let previous = null;
+
+  document.getElementById('download').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/transcript.txt', { headers: authHeaders, cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = 'transcript.txt';
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      alert('download failed (' + err.message + ')');
+    }
+  });
 
   function escapeHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -97,7 +122,10 @@
 
   async function tick() {
     try {
-      const res = await fetch(SOURCE + '&t=' + Date.now(), { cache: 'no-store' });
+      const res = await fetch('/transcript.txt?t=' + Date.now(), {
+        headers: authHeaders,
+        cache: 'no-store'
+      });
       if (!res.ok) throw new Error(res.status);
       const text = await res.text();
       if (text !== previous) {
@@ -113,9 +141,12 @@
   }
 
   async function put(name, content) {
-    const target = '/send?k=' + encodeURIComponent(KEY) +
-      '&name=' + encodeURIComponent(name);
-    const res = await fetch(target, { method: 'POST', body: content });
+    const target = '/send?name=' + encodeURIComponent(name);
+    const res = await fetch(target, {
+      method: 'POST',
+      headers: authHeaders,
+      body: content
+    });
     if (!res.ok) throw new Error(name + ': ' + res.status);
   }
 

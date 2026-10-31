@@ -100,7 +100,7 @@ class PageTests(ServerCase):
         self.assertIn('id="body"', body)
         self.assertIn('id="text"', body)
         self.assertIn('id="files"', body)
-        self.assertIn("/transcript.txt?k=", body)
+        self.assertIn("/transcript.txt", body)
 
     def test_injects_the_configured_title_and_labels(self):
         _, body = self.get(f"/?k={TOKEN}")

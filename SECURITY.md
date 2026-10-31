@@ -15,11 +15,17 @@ Anyone holding the URL can read the transcript and submit input. There are no
 separate users, sessions, or second factor. Keep the link private. To rotate
 the token, delete its file and restart the server; existing links stop working.
 
-The token travels in the query string, so it appears in browser history and
-may appear in tunnel logs. Responses send `Cache-Control: no-store` and
-`Referrer-Policy: no-referrer`. The page also includes a referrer meta tag and a
-Content Security Policy restricting requests to its own origin. These headers
-do not remove the URL from history or tunnel logs.
+Requests authenticate using an `Authorization: Bearer <token>` header or a
+fallback `?k=<token>` query parameter. When accessed through a browser with `?k=`,
+the web client saves the token to session storage, strips the query parameter
+from the address bar using `history.replaceState`, and executes all subsequent
+transcript polling and uploads using `Authorization: Bearer` headers. Direct query
+string tokens are deprecated for API calls.
+
+Responses send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. The
+page also includes a referrer meta tag and a Content Security Policy restricting
+requests to its own origin. These headers protect against browser caching and
+referrer leakage.
 
 ## Session selection and filtering
 
@@ -64,12 +70,14 @@ An uploaded file can contain prompt injection. Restrict the agent's filesystem
 and tool permissions to what that session needs. HTTP validation cannot control
 what the agent does after reading an accepted file.
 
-## Network binding
+## Network binding and transport security
 
-The default is `127.0.0.1`. Keep it there. The server speaks plain HTTP and is
-intended to sit behind a tunnel that terminates TLS for remote access. Binding
-to `0.0.0.0` exposes token-protected traffic in cleartext on the LAN and is
-unsupported.
+The default is `127.0.0.1`. Keep it there. The server speaks plain HTTP and must
+sit behind a tunnel or reverse proxy that terminates TLS (HTTPS) for remote access.
+An `Authorization: Bearer` header protects against query-log leakage, but it does
+not encrypt traffic over the wire. Binding to `0.0.0.0` or exposing unencrypted
+HTTP on public or shared networks exposes the token and transcript to anyone on the
+path.
 
 ## Reporting
 
